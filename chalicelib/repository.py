@@ -13,14 +13,14 @@ class PortalDB:
 
     def __enter__(self):
         self.tunnel = SSHTunnelForwarder(
-                        ('ec2-54-190-122-132.us-west-2.compute.amazonaws.com', 22),
-                        ssh_username='ec2-user',
-                        ssh_private_key='/Users/rronga/Documents/work/nanban/OneDrive - Nanban Enterprise '
-                                        'LLC/Ec2_keypairs/nanban-dev-ec2.pem',
-                        remote_bind_address=('backtestingdb-cluster.cluster-cwm2blxcre5t.us-west-2.rds.amazonaws.com',
-                                             5432),
-                        local_bind_address=('localhost', 6543),  # could be any available port
-                        )
+            ('ec2-54-190-122-132.us-west-2.compute.amazonaws.com', 22),
+            ssh_username='ec2-user',
+            ssh_private_key='/Users/rronga/Documents/work/nanban/OneDrive - Nanban Enterprise '
+                            'LLC/Ec2_keypairs/nanban-dev-ec2.pem',
+            remote_bind_address=('backtestingdb-cluster.cluster-cwm2blxcre5t.us-west-2.rds.amazonaws.com',
+                                 5432),
+            local_bind_address=('localhost', 6543),  # could be any available port
+        )
         self.conn = utils.getDBConn(self.api_stage, self.tunnel)
         return self
 
@@ -284,7 +284,11 @@ class PortalDB:
                         SET 
                             quantity = sim_positions.quantity + EXCLUDED.quantity,
                             side = EXCLUDED.side,
-                            rec_updated_datetime = current_timestamp
+                            rec_updated_datetime = current_timestamp,
+                            rec_created_by = case when (sim_positions.side = 'BUY' and sim_positions.sectype = 'OPT')
+                                                    then concat(EXCLUDED.rec_created_by, '- Collect Juice' )
+                                                  else concat(EXCLUDED.rec_created_by, '- Buy Back 5% or 25% credit' )
+                                             end
                     ;
                 """
                 logger.debug("query: {}".format(query_str))
@@ -326,7 +330,7 @@ class PortalDB:
         logger.debug("query: {}".format(query))
         return utils.get_db_data(self.conn.cursor(), query)
 
-    def  getpositions(self, account_id: str, quotetime: str) -> list:
+    def getpositions(self, account_id: str, quotetime: str) -> list:
         """
 
         @param quotetime:
@@ -589,7 +593,7 @@ class PortalDB:
 
 if __name__ == "__main__":
     logger.setLevel('DEBUG')
-    output=None
+    output = None
     # portal_db = PortalDB('local')
     with PortalDB('local') as getPortalDB:
         # getPortalDB.getStrikes(756733, 'DEC15')
