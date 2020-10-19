@@ -398,9 +398,9 @@ class PortalDB:
         sec_type = 'STK'
         try:
             settle_time = quotetime.split(' ')[1].split('.')[0]
-            if settle_time != '16:00:00':
+            if settle_time != '16:15:00':
                 return [{"App Error": "Settlement API can only be called at the end of the day. For. e.g. 19998-01-02 "
-                                      "16:00:00"}]
+                                      "16:15:00"}]
             settle_date = quotetime.split(' ')[0].replace('-', '')
 
             with self.conn.cursor() as cur:
@@ -455,8 +455,7 @@ class PortalDB:
                                                     option_strike, expired 
                                             FROM public.sim_positions 
                                             WHERE account_id = '{account_id}' 
-                                            and option_expiry_date = {settle_date}
-                                            and side = 'SELL' ; 
+                                            and sectype = 'STK' ; 
                                         """
                 cur.execute(query)
                 stk_tups = cur.fetchall()
