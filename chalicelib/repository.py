@@ -511,6 +511,9 @@ class PortalDB:
                         # So using this method
                         pos_insert_count = cur.statusmessage
                         logger.debug("pos_insert_count: " + pos_insert_count)
+                    else:
+                        logger.debug("No need insert a zero position. "
+                                     "Mostly caused by a buy back scenario that left out 0 quantity obligation")
 
                 elif sell_stk_ind:
                     settle_qnty = df['quantity'] * 100
