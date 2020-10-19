@@ -3,6 +3,7 @@ import sys
 import os
 from chalicelib.setup_logger import get_logger
 from configparser import ConfigParser
+from sshtunnel import SSHTunnelForwarder
 
 logger = get_logger(__name__)
 _config_file = os.path.join(
@@ -34,21 +35,56 @@ def _getRDSConnString(api_stage: str) -> str:
     return conn_string
 
 
-def getDBConn(api_stage: str) -> object:
-    """
+def getDBConn(api_stage: str, tunnel: SSHTunnelForwarder) -> object:
+    # use plain db connection if executed on aws , identified by stage = dev
+    if api_stage.upper() == 'DEV':
+        conn = getDBConn_rds(api_stage)
+    else:
+        # use plain ssh tunnel to connect if executed on local , identified by stage = local
+        conn = getDBConn_ssh(api_stage, tunnel)
+    return conn
 
-    @param api_stage: stage name from API gateway used to lookup DB credentials from config.ini
-                      The stage name is created in the API gateway integration request section
-    @return:
+
+def getDBConn_rds(api_stage: str) -> psycopg2.connect:
     """
+        This method connects to back testing DB directly.
+
+        @param api_stage: stage name from API gateway used to lookup DB credentials from config.ini
+                          The stage name is created in the API gateway integration request section
+        @return:
+        """
     conn_string = _getRDSConnString(api_stage)
     try:
         conn = psycopg2.connect(conn_string)
     except Exception as e:
         logger.error("ERROR: Could not connect to Postgres instance.")
         logger.error(e)
-        sys.exit(1)
     logger.debug("Connection to RDS Postgres instance succeeded")
+    return conn
+
+
+def getDBConn_ssh(api_stage: str, tunnel: SSHTunnelForwarder) -> psycopg2.connect:
+    """
+    This method connects to back testing DB via ssh.
+
+    :param api_stage: stage name from API gateway used to lookup DB credentials from config.ini
+                      The stage name is created in the API gateway integration request section
+
+    :param tunnel: SSHTunnelForwarder object
+    :return:
+
+    """
+    # Start the tunnel
+    tunnel.start()
+    tunnel.daemon_forward_servers = True
+    # Create a database connection
+    conn = psycopg2.connect(
+        database='GKBackTesting1',
+        user='postgres',
+        password='nanbandev_123',
+        host=tunnel.local_bind_host,
+        port=tunnel.local_bind_port,
+    )
     return conn
 
 

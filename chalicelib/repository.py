@@ -1,6 +1,7 @@
 import decimal
 from chalicelib import utils as utils
 from chalicelib.setup_logger import get_logger
+from sshtunnel import SSHTunnelForwarder
 import sys
 
 logger = get_logger(__name__)
@@ -11,12 +12,22 @@ class PortalDB:
         self.api_stage = api_stage
 
     def __enter__(self):
-        self.conn = utils.getDBConn(self.api_stage)
+        self.tunnel = SSHTunnelForwarder(
+                        ('ec2-54-190-122-132.us-west-2.compute.amazonaws.com', 22),
+                        ssh_username='ec2-user',
+                        ssh_private_key='/Users/rronga/Documents/work/nanban/OneDrive - Nanban Enterprise '
+                                        'LLC/Ec2_keypairs/nanban-dev-ec2.pem',
+                        remote_bind_address=('backtestingdb-cluster.cluster-cwm2blxcre5t.us-west-2.rds.amazonaws.com',
+                                             5432),
+                        local_bind_address=('localhost', 6543),  # could be any available port
+                        )
+        self.conn = utils.getDBConn(self.api_stage, self.tunnel)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.conn.commit()
         self.conn.close()
+        self.tunnel.stop()
 
     def getStrikes(self, conid: int, month: str) -> list:
         """
@@ -315,7 +326,7 @@ class PortalDB:
         logger.debug("query: {}".format(query))
         return utils.get_db_data(self.conn.cursor(), query)
 
-    def getpositions(self, account_id: str, quotetime: str) -> list:
+    def  getpositions(self, account_id: str, quotetime: str) -> list:
         """
 
         @param quotetime:
@@ -481,22 +492,25 @@ class PortalDB:
                     next_cash_bal = float(prev_cash_balance) + float(settle_amount)
 
                     # ***************************************
-                    # Insert positions, buy the stock
+                    # Insert positions, buy the stock only if the quantity is > 0
+                    #   When we collect juice or buy back contract due to the 5% rule
+                    #   this api inserts is 0 record STK settlement. thats why we have > 0 check.
                     # ***************************************
-                    query = f"""
-                            INSERT INTO public.sim_positions (account_id, conid, sectype, quantity, avg_price, 
-                                                              side, ordertype, option_expiry_date, ticker, 
-                                                              option_strike, rec_created_by) 
-                            values ('{account_id}', {spy_con_id}, '{sec_type}', {settle_qnty}, '{settle_strike}',
-                                    '{side}', '{settle_order_type}', {not_applicable_num}, '{settle_ticker}', 
-                                     {settle_strike}, '{rec_created_by}');
-                            """
-                    logger.debug("query: {}".format(query))
-                    cur.execute(query)
-                    # note cur.fetchone() will throw exceptio as "no results to fetch" for inserts.
-                    # So using this method
-                    pos_insert_count = cur.statusmessage
-                    logger.debug("pos_insert_count: " + pos_insert_count)
+                    if settle_qnty > 0:
+                        query = f"""
+                                INSERT INTO public.sim_positions (account_id, conid, sectype, quantity, avg_price, 
+                                                                  side, ordertype, option_expiry_date, ticker, 
+                                                                  option_strike, rec_created_by) 
+                                values ('{account_id}', {spy_con_id}, '{sec_type}', {settle_qnty}, '{settle_strike}',
+                                        '{side}', '{settle_order_type}', {not_applicable_num}, '{settle_ticker}', 
+                                         {settle_strike}, '{rec_created_by}');
+                                """
+                        logger.debug("query: {}".format(query))
+                        cur.execute(query)
+                        # note cur.fetchone() will throw exceptio as "no results to fetch" for inserts.
+                        # So using this method
+                        pos_insert_count = cur.statusmessage
+                        logger.debug("pos_insert_count: " + pos_insert_count)
 
                 elif sell_stk_ind:
                     settle_qnty = df['quantity'] * 100
@@ -572,6 +586,7 @@ class PortalDB:
 
 if __name__ == "__main__":
     logger.setLevel('DEBUG')
+    output=None
     # portal_db = PortalDB('local')
     with PortalDB('local') as getPortalDB:
         # getPortalDB.getStrikes(756733, 'DEC15')
@@ -592,20 +607,22 @@ if __name__ == "__main__":
         #     quantity=600,
         #     quote_timestamp='2013-06-28 13:30:00')
 
-        getPortalDB.putorder(
-            account_id='DU2387565',
-            # conid=2011010710011300,
-            conid=1998010520011000,
-            coid='DU2387565:C1',
-            parentid='DU2387565:P1',
-            ordertype='LIMIT',
-            price=2,
-            side='SELL',
-            ticker='SPY',
-            sectype='OPT',
-            quantity=7,
-            quote_timestamp='1998-01-02 09:00:00')
+        # getPortalDB.putorder(
+        #     account_id='DU2387565',
+        #     # conid=2011010710011300,
+        #     conid=1998010520011000,
+        #     coid='DU2387565:C1',
+        #     parentid='DU2387565:P1',
+        #     ordertype='LIMIT',
+        #     price=2,
+        #     side='SELL',
+        #     ticker='SPY',
+        #     sectype='OPT',
+        #     quantity=7,
+        #     quote_timestamp='1998-01-02 09:00:00')
 
         # getPortalDB.getledger(account_id='DU2387565')
-        # getPortalDB.getpositions(account_id='DU2387565')
+        # output = getPortalDB.getpositions(account_id='mano1M-1', quotetime='2015-09-11 16:00:00')
         # getPortalDB.postsettlement(account_id='DU2387565', quotetime='1998-01-07 15:00:00')
+
+        print(output)
