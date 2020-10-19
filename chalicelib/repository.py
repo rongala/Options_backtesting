@@ -286,8 +286,8 @@ class PortalDB:
                             side = EXCLUDED.side,
                             rec_updated_datetime = current_timestamp,
                             rec_created_by = case when (sim_positions.side = 'BUY' and sim_positions.sectype = 'OPT')
-                                                    then concat(EXCLUDED.rec_created_by, '- Collect Juice' )
-                                                  else concat(EXCLUDED.rec_created_by, '- Buy Back 5% or 25% credit' )
+                                                    then EXCLUDED.rec_created_by || ' - Collect Juice'
+                                                  else EXCLUDED.rec_created_by || ' - Buy Back 5% or 25% credit'
                                              end
                     ;
                 """
