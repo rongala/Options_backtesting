@@ -12,22 +12,21 @@ class PortalDB:
         self.api_stage = api_stage
 
     def __enter__(self):
-        self.tunnel = SSHTunnelForwarder(
-            ('ec2-54-190-122-132.us-west-2.compute.amazonaws.com', 22),
-            ssh_username='ec2-user',
-            ssh_private_key='/Users/rronga/Documents/work/nanban/OneDrive - Nanban Enterprise '
-                            'LLC/Ec2_keypairs/nanban-dev-ec2.pem',
-            remote_bind_address=('backtestingdb-cluster.cluster-cwm2blxcre5t.us-west-2.rds.amazonaws.com',
-                                 5432),
-            local_bind_address=('localhost', 6543),  # could be any available port
-        )
-        self.conn = utils.getDBConn(self.api_stage, self.tunnel)
+        # self.tunnel = SSHTunnelForwarder(
+        #     ('ec2-54-190-122-132.us-west-2.compute.amazonaws.com', 22),
+        #     ssh_username='ec2-user',
+        #     ssh_private_key='nanban-dev-ec2.pem',
+        #     remote_bind_address=('backtestingdb-cluster.cluster-cwm2blxcre5t.us-west-2.rds.amazonaws.com',
+        #                          5432),
+        #     local_bind_address=('localhost', 6543)
+        # )
+        self.conn = utils.getDBConn(self.api_stage)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.conn.commit()
         self.conn.close()
-        self.tunnel.stop()
+        # self.tunnel.stop()
 
     def getStrikes(self, conid: int, month: str) -> list:
         """
@@ -283,7 +282,8 @@ class PortalDB:
                     ON CONFLICT (account_id, conid) DO UPDATE
                         SET 
                             quantity = sim_positions.quantity + EXCLUDED.quantity,
-                            side = EXCLUDED.side,
+                            side = case when (sim_positions.side = 'SELL') then EXCLUDED.side 
+                                        else sim_positions.side end,
                             rec_updated_datetime = current_timestamp,
                             rec_created_by = case when (sim_positions.side = 'BUY' and sim_positions.sectype = 'OPT')
                                                     then EXCLUDED.rec_created_by || ' - Collect Juice'

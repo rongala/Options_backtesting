@@ -17,7 +17,7 @@ deactivate
 chalice local
 
 # deploy Chalice app
-chalice delete --profile devwest
+chalice deploy --profile devwest
 
 # Sample chalice local endpoints
 localhost:8000/iserver/secdef/strikes?conid=756733&month=DEC15&sectype=OPT&exchange=SMART&stage=local
