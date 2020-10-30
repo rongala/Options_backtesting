@@ -26,11 +26,11 @@ create table public.sim_positions
  truncate table public.sim_ledger_history;
  truncate table public.sim_positions;
 
-  insert into public.sim_ledger_history
- (account_id, cashbalance, order_id, order_amount, quote_timestamp,rec_created_by)
- values
- ('rongar-test', 100000, null, null, current_timestamp, 'Manual Account Seed' )
- returning ledger_id;
+insert into public.sim_ledger_history
+(account_id, cashbalance, order_id, order_amount, quote_timestamp,rec_created_by)
+values
+('rongar-test', 100000, null, null, current_timestamp, 'Manual Account Seed' )
+returning ledger_id;
  
  
  select * from public.ibkr_premium_trade_history

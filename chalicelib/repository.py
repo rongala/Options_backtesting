@@ -287,7 +287,9 @@ class PortalDB:
                             rec_updated_datetime = current_timestamp,
                             rec_created_by = case when (sim_positions.side = 'BUY' and sim_positions.sectype = 'OPT')
                                                     then EXCLUDED.rec_created_by || ' - Collect Juice'
-                                                  else EXCLUDED.rec_created_by || ' - Buy Back 5% or 25% credit'
+                                                  when (sim_positions.side = 'SELL' and sim_positions.sectype = 'OPT')
+                                                    then EXCLUDED.rec_created_by || ' - Buy Back 5% or 25% credit'
+                                                  else EXCLUDED.rec_created_by
                                              end
                     ;
                 """
