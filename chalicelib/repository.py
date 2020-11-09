@@ -2,7 +2,6 @@ import decimal
 from chalicelib import utils as utils
 from chalicelib.setup_logger import get_logger
 from sshtunnel import SSHTunnelForwarder
-import sys
 
 logger = get_logger(__name__)
 
@@ -12,21 +11,26 @@ class PortalDB:
         self.api_stage = api_stage
 
     def __enter__(self):
-        # self.tunnel = SSHTunnelForwarder(
-        #     ('ec2-54-190-122-132.us-west-2.compute.amazonaws.com', 22),
-        #     ssh_username='ec2-user',
-        #     ssh_private_key='nanban-dev-ec2.pem',
-        #     remote_bind_address=('backtestingdb-cluster.cluster-cwm2blxcre5t.us-west-2.rds.amazonaws.com',
-        #                          5432),
-        #     local_bind_address=('localhost', 6543)
-        # )
-        self.conn = utils.getDBConn(self.api_stage)
+        if self.api_stage.upper() == 'DEV':
+            self.conn = utils.getDBConn(self.api_stage)
+        else:
+            # creating tunnel instead of utility is to be able to close the tunnel with
+            # scope of context manager.
+            self.tunnel = SSHTunnelForwarder(
+                ('ec2-54-190-122-132.us-west-2.compute.amazonaws.com', 22),
+                ssh_username='ec2-user',
+                ssh_private_key='nanban-dev-ec2.pem',
+                remote_bind_address=('backtestingdb-cluster.cluster-cwm2blxcre5t.us-west-2.rds.amazonaws.com',
+                                     5432),
+                local_bind_address=('localhost', 6543)
+            )
+            self.conn = utils.getDBConn(self.api_stage, self.tunnel)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.conn.commit()
         self.conn.close()
-        # self.tunnel.stop()
+        self.tunnel.stop()
 
     def getStrikes(self, conid: int, month: str) -> list:
         """
@@ -221,8 +225,8 @@ class PortalDB:
                 # get positions to check to avoid naked sells of stk.
                 query_str = f"""
                                 select quantity from public.sim_positions
-                                where account_id = account_id
-                                  and conid = conid;
+                                where account_id = {account_id}
+                                  and conid = {conid};
                             """
                 logger.debug("query: {}".format(query_str))
                 cur.execute(query_str)
@@ -449,7 +453,7 @@ class PortalDB:
                 # print(tups)
                 # it is assumed that accoutn will not have more than one obligation
                 # if it has, it considered as exception and handled above.
-                # so it is ok to assing the variables in loop as it will execute only once.
+                # so it is ok to accessing the variables in loop as it will execute only once.
                 # sample db output:
                 # ('DU2387565', 1998010520011000, 'SPY', 'OPT', -7, 'P', 'SELL', 19980105, Decimal('110.00'), False)
                 for row in tups:
@@ -481,92 +485,114 @@ class PortalDB:
                 else:
                     stk_avail_ind = True if len(stk_tups) == 1 else False
 
-                buy_stk_ind = (df['side'] == 'SELL') & (df['option_type'] == 'P') & (df['sectype'] == 'OPT')
-                sell_stk_ind = (df['side'] == 'SELL') & (df['option_type'] == 'C') & stk_avail_ind
+                # get current price for the asset to identify if the contract is In-The-Money for settlement.
+                query = f""" select max(last_price) from public.sim_stock_history 
+                                where quote_datetime = '{quotetime}'
+                                and conid = {spy_con_id};
+                                """
+                cur.execute(query)
+                stk_eod_price_tup = cur.fetchone()
+                if len(stk_eod_price_tup) == 0:
+                    raise Exception(f"EOD price for SPY not available for {quotetime}")
+                stk_eod_price = stk_eod_price_tup[0]
+                # Find out if the contract is in the money
+                if ((df['option_type'] == 'P' and stk_eod_price > df['option_strike'])
+                        or (df['option_type'] == 'C' and stk_eod_price < df['option_strike'])):
+                    is_in_the_money = True
+                else:
+                    is_in_the_money = False
+
+                logger.debug(f"Option type : {df['option_type']}, option strike : {df['option_strike']}, "
+                             f"stk eod price : {stk_eod_price}, Is it in the money ? : {is_in_the_money}")
+
+                # choose wether to buy or sell the asset to settle
+                buy_stk_ind = (df['side'] == 'SELL') & (df['option_type'] == 'P') & (df['sectype'] == 'OPT') \
+                              & is_in_the_money
+                sell_stk_ind = (df['side'] == 'SELL') & (df['option_type'] == 'C') & stk_avail_ind & is_in_the_money
 
                 logger.debug(f"buy_stk_ind: {buy_stk_ind}")
                 logger.debug(f"sell_stk_ind: {sell_stk_ind}")
 
-                # if there is put that is sold, no calls sold and no stk pos then buy the stock.
-                if buy_stk_ind:
-                    settle_qnty = df['quantity'] * -100
-                    settle_strike = df['option_strike']
-                    settle_ticker = df['ticker']
-                    settle_amount = (settle_strike * settle_qnty) * -1
-                    side = df['side']
-                    # calc the new cashbalance
-                    next_cash_bal = float(prev_cash_balance) + float(settle_amount)
+                if buy_stk_ind or sell_stk_ind:
+                    # if there is put that is sold, no calls sold and no stk pos then buy the stock.
+                    if buy_stk_ind:
+                        settle_qnty = df['quantity'] * -100
+                        settle_strike = df['option_strike']
+                        settle_ticker = df['ticker']
+                        settle_amount = (settle_strike * settle_qnty) * -1
+                        side = df['side']
+                        # calc the new cashbalance
+                        next_cash_bal = float(prev_cash_balance) + float(settle_amount)
 
-                    # ***************************************
-                    # Insert positions, buy the stock only if the quantity is > 0
-                    #   When we collect juice or buy back contract due to the 5% rule
-                    #   this api inserts is 0 record STK settlement. thats why we have > 0 check.
-                    # ***************************************
-                    if settle_qnty > 0:
+                        # ***************************************
+                        # Insert positions, buy the stock only if the quantity is > 0
+                        #   When we collect juice or buy back contract due to the 5% rule
+                        #   this api inserts is 0 record STK settlement. thats why we have > 0 check.
+                        # ***************************************
+                        if settle_qnty > 0:
+                            query = f"""
+                                    INSERT INTO public.sim_positions (account_id, conid, sectype, quantity, avg_price, 
+                                                                      side, ordertype, option_expiry_date, ticker, 
+                                                                      option_strike, rec_created_by) 
+                                    values ('{account_id}', {spy_con_id}, '{sec_type}', {settle_qnty}, '{settle_strike}',
+                                            '{side}', '{settle_order_type}', {not_applicable_num}, '{settle_ticker}', 
+                                             {settle_strike}, '{rec_created_by}');
+                                    """
+                            logger.debug("query: {}".format(query))
+                            cur.execute(query)
+                            # note cur.fetchone() will throw exceptio as "no results to fetch" for inserts.
+                            # So using this method
+                            pos_insert_count = cur.statusmessage
+                            logger.debug("pos_insert_count: " + pos_insert_count)
+                        else:
+                            logger.debug("No need insert a zero position. "
+                                         "Mostly caused by a buy back scenario that left out 0 quantity obligation")
+                    elif sell_stk_ind:
+                        settle_qnty = df['quantity'] * 100
+                        settle_strike = df['option_strike']
+                        settle_ticker = df['ticker']
+                        settle_amount = (settle_strike * settle_qnty) * -1
+                        side = df['side']
+                        # calc the new cashbalance
+                        next_cash_bal = float(prev_cash_balance) + float(settle_amount)
+                        # Stck will be sold later in the same DB transaction, so deleting it to mimic the give away of
+                        # the stock.
                         query = f"""
-                                INSERT INTO public.sim_positions (account_id, conid, sectype, quantity, avg_price, 
-                                                                  side, ordertype, option_expiry_date, ticker, 
-                                                                  option_strike, rec_created_by) 
-                                values ('{account_id}', {spy_con_id}, '{sec_type}', {settle_qnty}, '{settle_strike}',
-                                        '{side}', '{settle_order_type}', {not_applicable_num}, '{settle_ticker}', 
-                                         {settle_strike}, '{rec_created_by}');
+                                DELETE FROM public.sim_positions sp
+                                WHERE sp.account_id = '{account_id}'
+                                AND conid = {spy_con_id}
+                                AND sectype = '{sec_type}'
+                                AND ticker = '{settle_ticker}';
                                 """
                         logger.debug("query: {}".format(query))
                         cur.execute(query)
                         # note cur.fetchone() will throw exceptio as "no results to fetch" for inserts.
                         # So using this method
-                        pos_insert_count = cur.statusmessage
-                        logger.debug("pos_insert_count: " + pos_insert_count)
-                    else:
-                        logger.debug("No need insert a zero position. "
-                                     "Mostly caused by a buy back scenario that left out 0 quantity obligation")
+                        pos_delete_count = cur.statusmessage
+                        logger.debug("pos_delete_count: " + pos_delete_count)
 
-                elif sell_stk_ind:
-                    settle_qnty = df['quantity'] * 100
-                    settle_strike = df['option_strike']
-                    settle_ticker = df['ticker']
-                    settle_amount = (settle_strike * settle_qnty) * -1
-                    side = df['side']
-                    # calc the new cashbalance
-                    next_cash_bal = float(prev_cash_balance) + float(settle_amount)
-                    # Stck will be sold later in the same DB transaction, so deleting it to mimic the give away of
-                    # the stock.
-                    query = f"""
-                            DELETE FROM public.sim_positions sp
-                            WHERE sp.account_id = '{account_id}'
-                            AND conid = {spy_con_id}
-                            AND sectype = '{sec_type}'
-                            AND ticker = '{settle_ticker}';
-                            """
-                    logger.debug("query: {}".format(query))
-                    cur.execute(query)
-                    # note cur.fetchone() will throw exceptio as "no results to fetch" for inserts.
-                    # So using this method
-                    pos_delete_count = cur.statusmessage
-                    logger.debug("pos_delete_count: " + pos_delete_count)
+                    # ****************************************
+                    # insert record into order history table.
+                    # ****************************************
+                    order_id_tup = utils.ins_order_history(account_id=account_id, amount=settle_amount, coid=coid,
+                                                           conid=spy_con_id, cur=cur, option_expiry_date=not_applicable_num,
+                                                           option_strike=not_applicable_num, option_type=not_applicable_str,
+                                                           ordertype=settle_order_type, parentid=parent_stlmnt_coid,
+                                                           price=settle_strike,
+                                                           quantity=settle_qnty,
+                                                           quote_timestamp=quotetime, rec_created_by=rec_created_by,
+                                                           sectype=sec_type, side=side, ticker=settle_ticker)
+                    if order_id_tup is None:
+                        raise Exception("Unable to insert in to order history and create order id (series col)")
+                    order_id = order_id_tup[0][0]
+                    logger.debug("order_id: " + str(order_id))
 
-                # ****************************************
-                # insert record into order history table.
-                # ****************************************
-                order_id_tup = utils.ins_order_history(account_id=account_id, amount=settle_amount, coid=coid,
-                                                       conid=spy_con_id, cur=cur, option_expiry_date=not_applicable_num,
-                                                       option_strike=not_applicable_num, option_type=not_applicable_str,
-                                                       ordertype=settle_order_type, parentid=parent_stlmnt_coid,
-                                                       price=settle_strike,
-                                                       quantity=settle_qnty,
-                                                       quote_timestamp=quotetime, rec_created_by=rec_created_by,
-                                                       sectype=sec_type, side=side, ticker=settle_ticker)
-                if order_id_tup is None:
-                    raise Exception("Unable to insert in to order history and create order id (series col)")
-                order_id = order_id_tup[0][0]
-                logger.debug("order_id: " + str(order_id))
-
-                # **************************************
-                # insert data into ledger history table
-                # *************************************
-                ledger_id, query = utils.ins_ledger_history(account_id=account_id, amount=settle_amount, cur=cur,
-                                                            cur_cash_balance=next_cash_bal, order_id=order_id,
-                                                            quote_timestamp=quotetime, rec_created_by=rec_created_by)
+                    # **************************************
+                    # insert data into ledger history table
+                    # *************************************
+                    ledger_id, query = utils.ins_ledger_history(account_id=account_id, amount=settle_amount, cur=cur,
+                                                                cur_cash_balance=next_cash_bal, order_id=order_id,
+                                                                quote_timestamp=quotetime, rec_created_by=rec_created_by)
                 self._delete_positions(account_id, cur, query, settle_date)
         except Exception as e:
             logger.error(f"Error executing Query in DB: {query}")
@@ -599,7 +625,7 @@ if __name__ == "__main__":
     # portal_db = PortalDB('local')
     with PortalDB('local') as getPortalDB:
         # getPortalDB.getStrikes(756733, 'DEC15')
-        # getPortalDB.getinfo(756733, 'JAN98', 'C', '110')
+        # output = getPortalDB.getinfo(756733, 'JAN11', 'C', '114')
         # getPortalDB.getsnapshot(756733, '31', '2014-08-04 12:15:00')
         # getPortalDB.getsnapshot('2013062810011100', '84,86', '2013-06-28 13:30:00')
 
@@ -632,6 +658,7 @@ if __name__ == "__main__":
 
         # getPortalDB.getledger(account_id='DU2387565')
         # output = getPortalDB.getpositions(account_id='mano1M-1', quotetime='2015-09-11 16:00:00')
-        # getPortalDB.postsettlement(account_id='DU2387565', quotetime='1998-01-07 15:00:00')
+        output = getPortalDB.postsettlement(account_id='DU2387565', quotetime='1998-01-07 16:15:00')
 
         print(output)
+
