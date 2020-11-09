@@ -11,7 +11,7 @@ class PortalDB:
         self.api_stage = api_stage
 
     def __enter__(self):
-        if self.api_stage.upper() == 'DEV':
+        if self.api_stage.upper() != 'LOCAL':
             self.conn = utils.getDBConn(self.api_stage)
         else:
             # creating tunnel instead of utility is to be able to close the tunnel with
@@ -30,7 +30,8 @@ class PortalDB:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.conn.commit()
         self.conn.close()
-        self.tunnel.stop()
+        if self.api_stage.upper() == 'LOCAL':
+            self.tunnel.stop()
 
     def getStrikes(self, conid: int, month: str) -> list:
         """
@@ -225,7 +226,7 @@ class PortalDB:
                 # get positions to check to avoid naked sells of stk.
                 query_str = f"""
                                 select quantity from public.sim_positions
-                                where account_id = {account_id}
+                                where account_id = '{account_id}'
                                   and conid = {conid};
                             """
                 logger.debug("query: {}".format(query_str))
