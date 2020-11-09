@@ -78,7 +78,7 @@ def getDBConn_ssh(api_stage: str, tunnel: SSHTunnelForwarder) -> psycopg2.connec
     tunnel.daemon_forward_servers = True
     # Create a database connection
     conn = psycopg2.connect(
-        database='GKBackTesting1',
+        database='GKBackTesting2',
         user='postgres',
         password='nanbandev_123',
         host=tunnel.local_bind_host,
