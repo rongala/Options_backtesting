@@ -496,15 +496,16 @@ class PortalDB:
                     raise Exception(f"EOD price for SPY not available for {quotetime}")
                 stk_eod_price = stk_eod_price_tup[0]
                 # Find out if the contract is in the money
-                if ((df['option_type'] == 'P' and stk_eod_price > df['option_strike'])
-                        or (df['option_type'] == 'C' and stk_eod_price < df['option_strike'])):
+                if ((df['option_type'] == 'P' and stk_eod_price <= df['option_strike'])
+                        or (df['option_type'] == 'C' and stk_eod_price >= df['option_strike'])):
                     is_in_the_money = True
                 else:
                     is_in_the_money = False
 
                 logger.debug(f"Option type : {df['option_type']}, option strike : {df['option_strike']}, "
                              f"stk eod price : {stk_eod_price}, Is it in the money ? : {is_in_the_money}")
-
+                logger.debug(f"type of option_strike : {type(df['option_strike'])}")
+                logger.debug(f"type of stk_eod_price : {type(stk_eod_price)}")
                 # choose wether to buy or sell the asset to settle
                 buy_stk_ind = (df['side'] == 'SELL') & (df['option_type'] == 'P') & (df['sectype'] == 'OPT') \
                               & is_in_the_money
@@ -513,7 +514,7 @@ class PortalDB:
                 logger.debug(f"buy_stk_ind: {buy_stk_ind}")
                 logger.debug(f"sell_stk_ind: {sell_stk_ind}")
 
-                if buy_stk_ind or sell_stk_ind:
+                if buy_stk_ind or sell_stk_ind:  # Insert ordr_hist and pos only if there is a settlement scenario.
                     # if there is put that is sold, no calls sold and no stk pos then buy the stock.
                     if buy_stk_ind:
                         settle_qnty = df['quantity'] * -100
@@ -575,8 +576,10 @@ class PortalDB:
                     # insert record into order history table.
                     # ****************************************
                     order_id_tup = utils.ins_order_history(account_id=account_id, amount=settle_amount, coid=coid,
-                                                           conid=spy_con_id, cur=cur, option_expiry_date=not_applicable_num,
-                                                           option_strike=not_applicable_num, option_type=not_applicable_str,
+                                                           conid=spy_con_id, cur=cur,
+                                                           option_expiry_date=not_applicable_num,
+                                                           option_strike=not_applicable_num,
+                                                           option_type=not_applicable_str,
                                                            ordertype=settle_order_type, parentid=parent_stlmnt_coid,
                                                            price=settle_strike,
                                                            quantity=settle_qnty,
@@ -592,7 +595,8 @@ class PortalDB:
                     # *************************************
                     ledger_id, query = utils.ins_ledger_history(account_id=account_id, amount=settle_amount, cur=cur,
                                                                 cur_cash_balance=next_cash_bal, order_id=order_id,
-                                                                quote_timestamp=quotetime, rec_created_by=rec_created_by)
+                                                                quote_timestamp=quotetime,
+                                                                rec_created_by=rec_created_by)
                 self._delete_positions(account_id, cur, query, settle_date)
         except Exception as e:
             logger.error(f"Error executing Query in DB: {query}")
@@ -658,7 +662,6 @@ if __name__ == "__main__":
 
         # getPortalDB.getledger(account_id='DU2387565')
         # output = getPortalDB.getpositions(account_id='mano1M-1', quotetime='2015-09-11 16:00:00')
-        output = getPortalDB.postsettlement(account_id='GKBT-5S-4', quotetime='2016-01-08 16:15:00')
+        output = getPortalDB.postsettlement(account_id='GKBT-5S-9', quotetime='2016-01-22 16:15:00')
 
         print(output)
-
