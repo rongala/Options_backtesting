@@ -1,5 +1,4 @@
 import psycopg2 as psycopg2
-import sys
 import os
 from chalicelib.setup_logger import get_logger
 from configparser import ConfigParser
@@ -35,13 +34,13 @@ def _getRDSConnString(api_stage: str) -> str:
     return conn_string
 
 
-def getDBConn(api_stage: str) -> object:
+def getDBConn(api_stage: str, tunnel: SSHTunnelForwarder = None) -> object:
     # use plain db connection if executed on aws , identified by stage = dev
     if api_stage.upper() == 'DEV':
         conn = getDBConn_rds(api_stage)
     else:
         # use plain ssh tunnel to connect if executed on local , identified by stage = local
-        conn = getDBConn_rds(api_stage)
+        conn = getDBConn_ssh(api_stage, tunnel)
     return conn
 
 
