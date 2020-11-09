@@ -520,7 +520,7 @@ class PortalDB:
                         settle_strike = df['option_strike']
                         settle_ticker = df['ticker']
                         settle_amount = (settle_strike * settle_qnty) * -1
-                        side = df['side']
+                        side = 'BUY'
                         # calc the new cashbalance
                         next_cash_bal = float(prev_cash_balance) + float(settle_amount)
 
@@ -552,7 +552,7 @@ class PortalDB:
                         settle_strike = df['option_strike']
                         settle_ticker = df['ticker']
                         settle_amount = (settle_strike * settle_qnty) * -1
-                        side = df['side']
+                        side = 'SELL'
                         # calc the new cashbalance
                         next_cash_bal = float(prev_cash_balance) + float(settle_amount)
                         # Stck will be sold later in the same DB transaction, so deleting it to mimic the give away of
@@ -658,7 +658,7 @@ if __name__ == "__main__":
 
         # getPortalDB.getledger(account_id='DU2387565')
         # output = getPortalDB.getpositions(account_id='mano1M-1', quotetime='2015-09-11 16:00:00')
-        output = getPortalDB.postsettlement(account_id='DU2387565', quotetime='1998-01-07 16:15:00')
+        output = getPortalDB.postsettlement(account_id='GKBT-5S-4', quotetime='2016-01-08 16:15:00')
 
         print(output)
 
