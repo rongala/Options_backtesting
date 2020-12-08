@@ -536,9 +536,15 @@ class PortalDB:
                                     INSERT INTO public.sim_positions (account_id, conid, sectype, quantity, avg_price, 
                                                                       side, ordertype, option_expiry_date, ticker, 
                                                                       option_strike, rec_created_by) 
-                                    values ('{account_id}', {spy_con_id}, '{sec_type}', {settle_qnty}, '{settle_strike}',
-                                            '{side}', '{settle_order_type}', {not_applicable_num}, '{settle_ticker}', 
-                                             {settle_strike}, '{rec_created_by}');
+                                        values ('{account_id}', {spy_con_id}, '{sec_type}', {settle_qnty}, '{settle_strike}',
+                                                '{side}', '{settle_order_type}', {not_applicable_num}, '{settle_ticker}', 
+                                                 {settle_strike}, '{rec_created_by}')
+                                        ON CONFLICT (account_id, conid) 
+                                        DO UPDATE 
+                                            SET quantity = sim_positions.quantity + EXCLUDED.quantity, 
+                                                avg_price = EXCLUDED.avg_price,
+                                                rec_created_by = 'Settlement API - Added to existing stks'
+                                        ;
                                     """
                             logger.debug("query: {}".format(query))
                             cur.execute(query)
@@ -663,6 +669,6 @@ if __name__ == "__main__":
 
         # getPortalDB.getledger(account_id='DU2387565')
         # output = getPortalDB.getpositions(account_id='mano1M-1', quotetime='2015-09-11 16:00:00')
-        output = getPortalDB.postsettlement(account_id='GKBT-5S-9', quotetime='2016-01-22 16:15:00')
+        output = getPortalDB.postsettlement(account_id='stk2-ec2-1s', quotetime='2016-01-08 16:15:00')
 
         print(output)
