@@ -19,7 +19,7 @@ class PortalDB:
             self.tunnel = SSHTunnelForwarder(
                 ('ec2-54-190-122-132.us-west-2.compute.amazonaws.com', 22),
                 ssh_username='ec2-user',
-                ssh_private_key='nanban-dev-ec2.pem',
+                ssh_private_key='chalicelib/nanban-dev-ec2.pem',
                 remote_bind_address=('backtestingdb-cluster.cluster-cwm2blxcre5t.us-west-2.rds.amazonaws.com',
                                      5432),
                 local_bind_address=('localhost', 6543)
