@@ -567,6 +567,9 @@ class PortalDB:
                         # Note: we cannot delete the position record straight away because
                         # GKBOT accumulates stocks over time until a lot is available for
                         # trading.
+
+                        # note: the quantity in DB is negative that why we are deducting the
+                        #       settle quantity in the below query.
                         query = f"""
                                 update public.sim_positions sp
                                   set quantity = quantity + {settle_qnty}
