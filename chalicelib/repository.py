@@ -512,6 +512,7 @@ class PortalDB:
                               & is_in_the_money
                 sell_stk_ind = (df['side'] == 'SELL') & (df['option_type'] == 'C') & stk_avail_ind & is_in_the_money
 
+                logger.debug(f"Is obligation in the money? : {buy_stk_ind}")
                 logger.debug(f"buy_stk_ind: {buy_stk_ind}")
                 logger.debug(f"sell_stk_ind: {sell_stk_ind}")
 
@@ -692,6 +693,6 @@ if __name__ == "__main__":
 
         # getPortalDB.getledger(account_id='DU2387565')
         # output = getPortalDB.getpositions(account_id='mano1M-1', quotetime='2015-09-11 16:00:00')
-        output = getPortalDB.postsettlement(account_id='stk3-ec2-1s', quotetime='2016-01-22 16:15:00')
+        output = getPortalDB.postsettlement(account_id='stk4-ec2-1s', quotetime='2016-01-22 16:15:00')
 
         print(output)
