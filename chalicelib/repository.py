@@ -19,7 +19,7 @@ class PortalDB:
             self.tunnel = SSHTunnelForwarder(
                 ('ec2-54-190-122-132.us-west-2.compute.amazonaws.com', 22),
                 ssh_username='ec2-user',
-                ssh_private_key='chalicelib/nanban-dev-ec2.pem',
+                ssh_private_key='/Users/rronga/Documents/work/nanban/nanban-dev-ec2.pem',
                 remote_bind_address=('backtestingdb-cluster.cluster-cwm2blxcre5t.us-west-2.rds.amazonaws.com',
                                      5432),
                 local_bind_address=('localhost', 6543)
@@ -563,14 +563,34 @@ class PortalDB:
                         side = 'SELL'
                         # calc the new cashbalance
                         next_cash_bal = float(prev_cash_balance) + float(settle_amount)
-                        # Stck will be sold later in the same DB transaction, so deleting it to mimic the give away of
-                        # the stock.
+                        # deduct the qty of stocks to be sold from the existins positions
+                        # Note: we cannot delete the position record straight away because
+                        # GKBOT accumulates stocks over time until a lot is available for
+                        # trading.
                         query = f"""
-                                DELETE FROM public.sim_positions sp
+                                update public.sim_positions sp
+                                  set quantity = quantity + {settle_qnty}
                                 WHERE sp.account_id = '{account_id}'
                                 AND conid = {spy_con_id}
                                 AND sectype = '{sec_type}'
                                 AND ticker = '{settle_ticker}';
+                                """
+                        logger.debug("query: {}".format(query))
+                        cur.execute(query)
+                        pos_sell_count = cur.statusmessage
+                        logger.debug("pos sold qty: " + pos_sell_count)
+
+                        # Stck will be sold later in the same DB transaction via order api,
+                        # so deleting it to mimic the give away of the stock.
+                        # and delete positions only if the left over quantity = 0. Which means there were no extras
+                        # accumulated that are not part of the traded lots.
+                        query = f"""
+                                DELETE FROM public.sim_positions sp
+                                WHERE account_id = '{account_id}'
+                                AND conid = {spy_con_id}
+                                AND sectype = '{sec_type}'
+                                AND ticker = '{settle_ticker}'
+                                AND quantity = 0;
                                 """
                         logger.debug("query: {}".format(query))
                         cur.execute(query)
@@ -669,6 +689,6 @@ if __name__ == "__main__":
 
         # getPortalDB.getledger(account_id='DU2387565')
         # output = getPortalDB.getpositions(account_id='mano1M-1', quotetime='2015-09-11 16:00:00')
-        output = getPortalDB.postsettlement(account_id='stk2-ec2-1s', quotetime='2016-01-08 16:15:00')
+        output = getPortalDB.postsettlement(account_id='stk3-ec2-1s', quotetime='2016-01-22 16:15:00')
 
         print(output)
