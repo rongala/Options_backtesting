@@ -312,7 +312,7 @@ class PortalDB:
             # sys.exit(1)
         return [{'order_id': order_id, 'local_order_id': coid, 'order_status': 'Filled'}]
 
-    def getledger(self, account_id: str) -> list:
+    def getledger_bkp(self, account_id: str) -> list:
         """
 
         @param account_id:
@@ -337,6 +337,63 @@ class PortalDB:
         logger.debug("query: {}".format(query))
         return utils.get_db_data(self.conn.cursor(), query)
 
+    def getledger(self, account_id: str, quotetime: str) -> list:
+        """
+
+        :param account_id: string
+        :param quotetime: string
+        :return: list of tuples
+
+        sample Input:
+        -------------
+            getPortalDB.getledger(account_id='DU2387565', quotetime = '2016-10-14 10:15')
+
+        sample Output:
+        --------------
+            [(39394.0, 'cashbalance'), (2059248.82, 'netliquidationvalue')]
+        """
+
+        query = f"""select a.cashbalance, 'cashbalance' as bal_type
+                      from public.sim_ledger_history a
+                    where a.account_id = '{account_id}'
+                      and a.rec_created_datetime = (select max(rec_created_datetime) 
+                                                    from public.sim_ledger_history b
+                                                    where b.account_id = a.account_id)
+                    union
+                    select sum(cur_liq), 'netliquidationvalue' as bal_type
+                    from (
+                        select
+                            account_id as acctId,
+                            ((case when upper(side) = 'SELL' 
+                             then -1 
+                             else 1 
+                             end) * quantity * z.last_price)::float as cur_liq
+                        from
+                            public.sim_positions a
+                        left join public.sim_option_history z on
+                            z.contractid = a.conid
+                            and z.quote_datetime = '{quotetime}'
+                        where
+                            account_id = '{account_id}'
+                            and sectype = 'OPT'
+                        union 
+                        select
+                            account_id as acctId,
+                            (quantity * COALESCE(z.last_price,0))::float as cur_liq
+                        from
+                            public.sim_positions a
+                        left join public.sim_stock_history z on
+                            z.conid = a.conid
+                            and z.quote_datetime = '{quotetime}'
+                        where
+                            account_id = '{account_id}'
+                            and sectype = 'STK'
+                        ) z
+                    Group by acctId;
+                    """
+        logger.debug("query: {}".format(query))
+        return utils.get_db_data(self.conn.cursor(), query)
+
     def getpositions(self, account_id: str, quotetime: str) -> list:
         """
 
@@ -346,7 +403,7 @@ class PortalDB:
 
         sample Input:
         -------------
-            getPortalDB.getpositions(account_id='DU2387565')
+            getPortalDB.getpositions(account_id='DU2387565',  quotetime = '2016-10-14 10:15)
 
         sample Output:
         --------------
@@ -690,9 +747,8 @@ if __name__ == "__main__":
         #     sectype='OPT',
         #     quantity=7,
         #     quote_timestamp='1998-01-02 09:00:00')
-
-        # getPortalDB.getledger(account_id='DU2387565')
+        output = getPortalDB.getledger(account_id='gkbot1M-81516', quotetime='2016-10-14 22:15:00')
         # output = getPortalDB.getpositions(account_id='mano1M-1', quotetime='2015-09-11 16:00:00')
-        output = getPortalDB.postsettlement(account_id='stk4-ec2-1s', quotetime='2016-01-22 16:15:00')
+        # output = getPortalDB.postsettlement(account_id='stk4-ec2-1s', quotetime='2016-01-22 16:15:00')
 
         print(output)

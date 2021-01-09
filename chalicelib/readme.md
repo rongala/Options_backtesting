@@ -16,6 +16,9 @@ deactivate
 # run app locally
 chalice local
 
+### To test deploy to stage test before deploying
+chalice deploy --profile devwest --stage test
+
 # deploy Chalice app
 chalice deploy --profile devwest
 

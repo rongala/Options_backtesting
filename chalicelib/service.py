@@ -134,17 +134,25 @@ class PortalService:
         {'account_id': 'DU2387565', 'cashbalace': '8570.00'}
 
         """
-        req_keys = ['account_id']
+        req_keys = ['account_id', 'quotetime']
         missing_params = missing_parameters(req_keys, event)
         if missing_params:
             return {"Missing parameters Error": missing_params}
-        output_list = self.portal_db.getledger(account_id=event['account_id'])
+        output_list = self.portal_db.getledger(account_id=event['account_id'], quotetime=event['quotetime'])
+        cashbalance = None
+        netliquidationvalue = None
+
         if output_list is None:
-            output = {"account_id": event['account_id'], "USD": {"cashbalance": None}}
+            output = {"account_id": event['account_id'], "USD": {"cashbalance": cashbalance, "netliquidationvalue": netliquidationvalue}}
         else:
             # TODO: Figure out a way to serialize decimal instead of converting to float.
             #       Float convertion is a temp solution.
-            output = {"account_id": event['account_id'], "USD": {"cashbalance": float(output_list[0][0])}}
+            for val_tuple in output_list:
+                if val_tuple[1] == 'cashbalance':
+                    cashbalance = float(val_tuple[0])
+                elif val_tuple[1] == 'netliquidationvalue':
+                    netliquidationvalue = float(val_tuple[0])
+            output = {"account_id": event['account_id'], "USD": {"cashbalance": cashbalance, "netliquidationvalue": netliquidationvalue}}
         logger.debug(output)
         return output
 
@@ -219,7 +227,7 @@ if __name__ == "__main__":
                            "side": "BUY", "ticker": "SPY", "tif": "DAY", "referrer": "QuickTrade",
                            "useAdaptive": True, "stage": "local", "quotetime": '1998-01-02 09:00:00'
                            }
-    settlement_event = {"account_id": "DU2387565", "quotetime": '1998-01-02 09:00:00'}
+    settlement_event = {"account_id": "gkbot1M-81516", "quotetime": '2016-10-14 10:15:00'}
 
     # Instantiate and dependency Injection
     with PortalDB(event_in["stage"]) as getPortalDB:
@@ -229,6 +237,6 @@ if __name__ == "__main__":
         # getSrvc.getSnapshotSrvc(snpsht_31_event_in)
         # getSrvc.getSnapshotSrvc(snpsht_84_86_evt_in)
         # getSrvc.putOrderSrvc(ordr_buy_spy_evt_in)
-        # getSrvc.getLedgerSrvc(ordr_buy_spy_evt_in)
-        getSrvc.getPositionsSrvc(ordr_buy_spy_evt_in)
+        getSrvc.getLedgerSrvc(settlement_event)
+        # getSrvc.getPositionsSrvc(ordr_buy_spy_evt_in)
         # getSrvc.postSettlementSrvc(settlement_event)
