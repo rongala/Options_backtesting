@@ -6,13 +6,10 @@
       "autogen_policy": true,
       "api_gateway_stage": "dev",
       "subnet_ids": [
-        "subnet-0bab71ede6889d602",
-        "subnet-0b281c740251b96ce",
-        "subnet-0f8746ee31bab3a46",
-        "subnet-05074ef61f8c002d0"
+        "subnet-063c20c51c06fcd5f"
       ],
       "security_group_ids": [
-        "sg-0e1f70faead44f5cb"
+        "sg-0dd0481af16852f87"
       ]
     }
   }

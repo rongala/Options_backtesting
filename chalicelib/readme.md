@@ -9,7 +9,7 @@ https://medium.com/swlh/getting-started-with-chalice-to-create-aws-lambdas-in-py
 # initial setup to work in venv
 cd my-project
 virtualenv venv
-.\venv\Scripts\activate
+.\venv\bin\activate
 pip freeze > requirements.txt
 deactivate
 

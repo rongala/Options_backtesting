@@ -152,7 +152,7 @@ class PortalService:
                     cashbalance = float(val_tuple[0])
                 elif val_tuple[1] == 'netliquidationvalue':
                     netliquidationvalue = float(val_tuple[0])
-            output = {"account_id": event['account_id'], "USD": {"cashbalance": cashbalance, "netliquidationvalue": netliquidationvalue}}
+            output = {"account_id": event['account_id'], "USD": {"cashbalance": cashbalance, "netliquidationvalue": netliquidationvalue + cashbalance}}
         logger.debug(output)
         return output
 

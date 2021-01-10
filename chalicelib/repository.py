@@ -353,6 +353,9 @@ class PortalDB:
             [(39394.0, 'cashbalance'), (2059248.82, 'netliquidationvalue')]
         """
 
+        # Note: Cash  balance is added to net liquidation in Service layer.
+        # since the query is hard to modify, its a quick hack.
+        # TODO: change this behvior to get all the values in query itself
         query = f"""select a.cashbalance, 'cashbalance' as bal_type
                       from public.sim_ledger_history a
                     where a.account_id = '{account_id}'
@@ -360,7 +363,7 @@ class PortalDB:
                                                     from public.sim_ledger_history b
                                                     where b.account_id = a.account_id)
                     union
-                    select sum(cur_liq), 'netliquidationvalue' as bal_type
+                    select sum(cur_liq), 'netliquidationvalue' as bal_type 
                     from (
                         select
                             account_id as acctId,
