@@ -139,8 +139,8 @@ class PortalService:
         if missing_params:
             return {"Missing parameters Error": missing_params}
         output_list = self.portal_db.getledger(account_id=event['account_id'], quotetime=event['quotetime'])
-        cashbalance = None
-        netliquidationvalue = None
+        cashbalance = 0
+        netliquidationvalue = 0
 
         if output_list is None:
             output = {"account_id": event['account_id'], "USD": {"cashbalance": cashbalance, "netliquidationvalue": netliquidationvalue}}
@@ -149,9 +149,9 @@ class PortalService:
             #       Float convertion is a temp solution.
             for val_tuple in output_list:
                 if val_tuple[1] == 'cashbalance':
-                    cashbalance = float(val_tuple[0])
+                    cashbalance = float(val_tuple[0]) if val_tuple[0] is not None else 0
                 elif val_tuple[1] == 'netliquidationvalue':
-                    netliquidationvalue = float(val_tuple[0])
+                    netliquidationvalue = float(val_tuple[0]) if val_tuple[0] is not None else 0
             output = {"account_id": event['account_id'], "USD": {"cashbalance": cashbalance, "netliquidationvalue": netliquidationvalue + cashbalance}}
         logger.debug(output)
         return output
