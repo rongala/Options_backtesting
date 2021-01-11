@@ -1,0 +1,16 @@
+{
+  "version": "2.0",
+  "app_name": "gkportal",
+  "stages": {
+    "dev": {
+      "autogen_policy": true,
+      "api_gateway_stage": "dev",
+      "subnet_ids": [
+        "subnet-063c20c51c06fcd5f"
+      ],
+      "security_group_ids": [
+        "sg-0dd0481af16852f87"
+      ]
+    }
+  }
+}
