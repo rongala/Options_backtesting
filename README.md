@@ -4,7 +4,7 @@ SIMAPI simulates a subset of the IBKR Client Portal REST API against a PostgreSQ
 
 Built with [AWS Chalice](https://aws.github.io/chalice/quickstart.html), deployable as AWS Lambda + API Gateway.
 
----
+-----
 
 ## Project Structure
 
