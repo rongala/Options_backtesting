@@ -11,7 +11,7 @@ class PortalService:
     def __init__(self, portal_db: PortalDB):
         self.portal_db = portal_db
 
-    def getStrikeSrvc(self, event: dict) -> dict:
+    def get_strike_srvc(self, event: dict) -> dict:
         """
         Returns a dict of strikes for call and put options from back testing data.
         expected to simulate iserver/secdef/strikes end point from IBKR client portal API.
@@ -29,7 +29,7 @@ class PortalService:
                 "error": "Missing Parameters: " + ", ".join(missing_params)
             }
 
-        records = self.portal_db.getStrikes(conid=int(event['conid']), month=event['month'])
+        records = self.portal_db.get_strikes(conid=int(event['conid']), month=event['month'])
         for row in records:
             if row[0] == 'C':
                 call_strike_list.append(row[1])
@@ -39,10 +39,10 @@ class PortalService:
                 custom_error = '\n Found invalid option_type : ' + row[0]
                 raise Exception(custom_error)
         output = {"call": call_strike_list, "put": put_strike_list}
-        logger.debug("getStrikeSrvc output: " + json.dumps(output))
+        logger.debug("get_strike_srvc output: " + json.dumps(output))
         return output
 
-    def getInfoSrvc(self, event: dict) -> list:
+    def get_info_srvc(self, event: dict) -> list:
         """
         returns all the option contracts for
             the underlying asset's (SPY) conid, month, strike and option_type a.k.a right.
@@ -65,14 +65,14 @@ class PortalService:
         missing_params = missing_parameters(req_keys, event)
         if missing_params:
             return [{"Missing parameters Error": missing_params}]
-        records = self.portal_db.getinfo(conid=int(event['conid']), month=event['month'],
-                                         option_type=event['right'], strike=event['strike'])
+        records = self.portal_db.get_info(conid=int(event['conid']), month=event['month'],
+                                        option_type=event['right'], strike=event['strike'])
         for rec in records:
             output.append(dict(zip(output_cols, rec)))
         logger.debug(output)
         return output
 
-    def getSnapshotSrvc(self, event: dict) -> list:
+    def get_snapshot_srvc(self, event: dict) -> list:
         """
         returns the current price (31), bid price(84) and ask price(86) for the requested conid and quote_datetime.
 
@@ -95,15 +95,15 @@ class PortalService:
         missing_params = missing_parameters(req_keys, event)
         if missing_params:
             return [{"Missing parameters Error": missing_params}]
-        records = self.portal_db.getsnapshot(conids=event['conids'], fields=event['fields'],
-                                             quotetime=event['quotetime'])
+        records = self.portal_db.get_snapshot(conids=event['conids'], fields=event['fields'],
+                                               quotetime=event['quotetime'])
         # logger.debug(records)
         for rec in records:
             output.append(dict(zip(output_cols, rec)))
         logger.debug(output)
         return output
 
-    def putOrderSrvc(self, event: dict) -> list:
+    def put_order_srvc(self, event: dict) -> list:
         """
         places order to order history, updates ledger history and positions data.
 
@@ -114,15 +114,15 @@ class PortalService:
         missing_params = missing_parameters(req_keys, event)
         if missing_params:
             return [{"Missing parameters Error": missing_params}]
-        output = self.portal_db.putorder(account_id=event['account_id'], conid=event['conid'],
-                                         coid=event['cOID'], parentid=event['parentId'],
-                                         ordertype=event['orderType'], price=Decimal(event['price']),
-                                         side=event['side'], ticker=event['ticker'], sectype=event['secType'],
-                                         quantity=Decimal(event['quantity']), quote_timestamp=event['quotetime'])
+        output = self.portal_db.put_order(account_id=event['account_id'], conid=event['conid'],
+                                           coid=event['cOID'], parentid=event['parentId'],
+                                           ordertype=event['orderType'], price=Decimal(event['price']),
+                                           side=event['side'], ticker=event['ticker'], sectype=event['secType'],
+                                           quantity=Decimal(event['quantity']), quote_timestamp=event['quotetime'])
         logger.debug(output)
         return output
 
-    def getLedgerSrvc(self, event: dict) -> dict:
+    def get_ledger_srvc(self, event: dict) -> dict:
         """
         returns cashbalance for the requested account.
 
@@ -138,7 +138,7 @@ class PortalService:
         missing_params = missing_parameters(req_keys, event)
         if missing_params:
             return {"Missing parameters Error": missing_params}
-        output_list = self.portal_db.getledger(account_id=event['account_id'], quotetime=event['quotetime'])
+        output_list = self.portal_db.get_ledger(account_id=event['account_id'], quotetime=event['quotetime'])
         cashbalance = 0
         netliquidationvalue = 0
 
@@ -156,7 +156,7 @@ class PortalService:
         logger.debug(output)
         return output
 
-    def getPositionsSrvc(self, event: dict) -> list:
+    def get_positions_srvc(self, event: dict) -> list:
         """
         returns all the current positions held by the account.
 
@@ -189,13 +189,13 @@ class PortalService:
         missing_params = missing_parameters(req_keys, event)
         if missing_params:
             return [{"Missing parameters Error": missing_params}]
-        records = self.portal_db.getpositions(account_id=event['account_id'], quotetime=event['quotetime'])
+        records = self.portal_db.get_positions(account_id=event['account_id'], quotetime=event['quotetime'])
         for rec in records:
             output.append(dict(zip(output_cols, rec)))
         logger.debug(output)
         return output
 
-    def postSettlementSrvc(self, event: dict) -> list:
+    def post_settlement_srvc(self, event: dict) -> list:
         """
         Settles the open positions at the end of the day.
 
@@ -206,7 +206,7 @@ class PortalService:
         missing_params = missing_parameters(req_keys, event)
         if missing_params:
             return [{"Missing parameters Error": missing_params}]
-        output = self.portal_db.postsettlement(account_id=event['account_id'], quotetime=event['quotetime'])
+        output = self.portal_db.post_settlement(account_id=event['account_id'], quotetime=event['quotetime'])
         logger.debug(output)
         return output
 
@@ -232,11 +232,11 @@ if __name__ == "__main__":
     # Instantiate and dependency Injection
     with PortalDB(event_in["stage"]) as getPortalDB:
         getSrvc = PortalService(getPortalDB)
-        # getSrvc.getStrikeSrvc(event_in)
-        # getSrvc.getInfoSrvc(event_info_in)
-        # getSrvc.getSnapshotSrvc(snpsht_31_event_in)
-        # getSrvc.getSnapshotSrvc(snpsht_84_86_evt_in)
-        # getSrvc.putOrderSrvc(ordr_buy_spy_evt_in)
-        getSrvc.getLedgerSrvc(settlement_event)
-        # getSrvc.getPositionsSrvc(ordr_buy_spy_evt_in)
-        # getSrvc.postSettlementSrvc(settlement_event)
+        # getSrvc.get_strike_srvc(event_in)
+        # getSrvc.get_info_srvc(event_info_in)
+        # getSrvc.get_snapshot_srvc(snpsht_31_event_in)
+        # getSrvc.get_snapshot_srvc(snpsht_84_86_evt_in)
+        # getSrvc.put_order_srvc(ordr_buy_spy_evt_in)
+        getSrvc.get_ledger_srvc(settlement_event)
+        # getSrvc.get_positions_srvc(ordr_buy_spy_evt_in)
+        # getSrvc.post_settlement_srvc(settlement_event)

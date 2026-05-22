@@ -19,7 +19,7 @@ chalice local
 ### To test deploy to stage test before deploying
 chalice deploy --profile devwest --stage test
 
-# deploy Chalice app
+# deploy Chalice app to west - using raj local profiles
 chalice deploy --profile devwest
 
 # Sample chalice local endpoints
